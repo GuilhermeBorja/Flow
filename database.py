@@ -1,38 +1,78 @@
+# database.py
 import sqlite3
 
 def init_db():
-    conn = sqlite3.connect("dados.db")
+    conn = sqlite3.connect("banco.db")
     c = conn.cursor()
+    # Tabela de processos
     c.execute("""
-        CREATE TABLE IF NOT EXISTS registros (
+        CREATE TABLE IF NOT EXISTS processos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            criado_por TEXT,
-            estado TEXT,
+            nome TEXT,
             empresa TEXT,
-            dado TEXT
+            setor TEXT,
+            estado TEXT,
+            criado_por TEXT,
+            responsavel TEXT,
+            data_criacao TEXT
+        )
+    """)
+    # Tabela de etapas
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS etapas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            processo_id INTEGER,
+            nome_etapa TEXT,
+            responsavel TEXT,
+            data_inicio TEXT,
+            data_fim TEXT,
+            FOREIGN KEY (processo_id) REFERENCES processos(id)
         )
     """)
     conn.commit()
     conn.close()
 
-def inserir_registro(usuario, dado):
-    conn = sqlite3.connect("dados.db")
+def inserir_processo(processo, etapas):
+    conn = sqlite3.connect("banco.db")
     c = conn.cursor()
-    c.execute("INSERT INTO registros (criado_por, estado, empresa, dado) VALUES (?, ?, ?, ?)",
-              (usuario["username"], usuario["estado"], usuario["empresa"], dado))
+    c.execute("""
+        INSERT INTO processos (nome, empresa, setor, estado, criado_por, responsavel, data_criacao)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (processo["nome"], processo["empresa"], processo["setor"], processo["estado"],
+          processo["criado_por"], processo["responsavel"], processo["data_criacao"]))
+    processo_id = c.lastrowid
+
+    for etapa in etapas:
+        c.execute("""
+            INSERT INTO etapas (processo_id, nome_etapa, responsavel, data_inicio, data_fim)
+            VALUES (?, ?, ?, NULL, NULL)
+        """, (processo_id, etapa["nome_etapa"], etapa["responsavel"]))
     conn.commit()
     conn.close()
 
-def apagar_registro(registro_id):
-    conn = sqlite3.connect("dados.db")
+def obter_processos_com_etapas():
+    conn = sqlite3.connect("banco.db")
     c = conn.cursor()
-    c.execute("DELETE FROM registros WHERE id = ?", (registro_id,))
-    conn.commit()
+
+    c.execute("SELECT * FROM processos")
+    processos = c.fetchall()
+
+    resultado = []
+    for processo in processos:
+        processo_id = processo[0]
+        c.execute("SELECT nome_etapa, responsavel, data_inicio, data_fim FROM etapas WHERE processo_id = ?", (processo_id,))
+        etapas = [{"nome_etapa": et[0], "responsavel": et[1], "data_inicio": et[2], "data_fim": et[3]} for et in c.fetchall()]
+        resultado.append({
+            "id": processo_id,
+            "nome": processo[1],
+            "empresa": processo[2],
+            "setor": processo[3],
+            "estado": processo[4],
+            "criado_por": processo[5],
+            "responsavel": processo[6],
+            "data_criacao": processo[7],
+            "etapas": etapas
+        })
+
     conn.close()
-def obter_registros():
-    conn = sqlite3.connect("dados.db")
-    c = conn.cursor()
-    c.execute("SELECT * FROM registros")
-    data = c.fetchall()
-    conn.close()
-    return [{"id": row[0], "criado_por": row[1], "estado": row[2], "empresa": row[3], "dado": row[4]} for row in data]
+    return resultado
